@@ -32,20 +32,22 @@ csi_error_t csi_ept_config_init(csp_ept_t *ptEptBase, csi_ept_config_t *pteptPwm
 	uint32_t wPrdrLoad; 
 	
 	if(pteptPwmCfg->wFreq == 0 ){pteptPwmCfg->wFreq =100;}
-	
-	
+		
 	csi_clk_enable((uint32_t *)ptEptBase);								// clk enable
-	
 	csp_ept_clken(ptEptBase);
 	csp_ept_wr_key(ptEptBase);                                           //Unlocking
 	csp_ept_reset(ptEptBase);											// reset 
 	
-
-	wClkDiv = (csi_get_pclk_freq() / pteptPwmCfg->wFreq / 30000);		// clk div value
-
-	if(wClkDiv == 0)wClkDiv = 1;
-	
-	wPrdrLoad  = (csi_get_pclk_freq()/pteptPwmCfg->wFreq/wClkDiv);	    //prdr load value
+	if(pteptPwmCfg->byCountingMode==EPT_UPDNCNT){
+		    wClkDiv = (csi_get_pclk_freq()  / pteptPwmCfg->wFreq /2 / 30000);		//clk div value
+			if(wClkDiv == 0)wClkDiv = 1;	
+			wPrdrLoad  = (csi_get_pclk_freq()/pteptPwmCfg->wFreq /2 /wClkDiv);	    //prdr load value
+		
+	}else{
+			wClkDiv = (csi_get_pclk_freq() / pteptPwmCfg->wFreq / 30000);		// clk div value
+			if(wClkDiv == 0)wClkDiv = 1;	
+			wPrdrLoad  = (csi_get_pclk_freq()/pteptPwmCfg->wFreq/wClkDiv);	    //prdr load value
+	}	
 			
 	wCrVal =pteptPwmCfg->byCountingMode | (pteptPwmCfg->byStartSrc<<EPT_STARTSRC_POS) |
 	        pteptPwmCfg->byOneshotMode<<EPT_OPMD_POS | (pteptPwmCfg->byWorkmod<<EPT_MODE_POS);
@@ -172,12 +174,16 @@ csi_error_t  csi_ept_wave_init(csp_ept_t *ptEptBase, csi_ept_pwmconfig_t *pteptP
 	csp_ept_wr_key(ptEptBase);                                           //Unlocking
 	csp_ept_reset(ptEptBase);											// reset 
 
-	wClkDiv=csi_get_pclk_freq();
-	wClkDiv = (wClkDiv / pteptPwmCfg->wFreq / 30000);		            // clk div value
-
-	if(wClkDiv == 0)wClkDiv = 1;
-	
-	wPrdrLoad  = (csi_get_pclk_freq()/pteptPwmCfg->wFreq/wClkDiv);	    //prdr load value
+	if(pteptPwmCfg->byCountingMode==EPT_UPDNCNT){
+		    wClkDiv = (csi_get_pclk_freq()  / pteptPwmCfg->wFreq /2 / 30000);		// clk div value
+			if(wClkDiv == 0)wClkDiv = 1;	
+			wPrdrLoad  = (csi_get_pclk_freq()/pteptPwmCfg->wFreq /2 /wClkDiv);	    //prdr load value
+		
+	}else{
+			wClkDiv = (csi_get_pclk_freq() / pteptPwmCfg->wFreq / 30000);		// clk div value
+			if(wClkDiv == 0)wClkDiv = 1;	
+			wPrdrLoad  = (csi_get_pclk_freq()/pteptPwmCfg->wFreq/wClkDiv);	    //prdr load value
+	}	
 		
 	wCrVal =pteptPwmCfg->byCountingMode | (pteptPwmCfg->byStartSrc<<EPT_STARTSRC_POS) |
 	        pteptPwmCfg->byOneshotMode<<EPT_OPMD_POS | (pteptPwmCfg->byWorkmod<<EPT_MODE_POS);
@@ -287,6 +293,7 @@ csi_error_t csi_ept_dbldrload_config(csp_ept_t *ptEptBase, csi_ept_dbdldr_e byVa
 */
 csi_error_t csi_ept_dbcr_config(csp_ept_t *ptEptBase, csi_ept_deadzone_config_t *tCfg)
 {  uint32_t w_Val;
+   
 	w_Val=csp_ept_get_dbcr(ptEptBase);	
 	w_Val=(w_Val&~(EPT_DCKSEL_MSK))|(tCfg-> byDcksel <<EPT_DCKSEL_POS);
 	w_Val=(w_Val&~(EPT_CHA_DEDB_MSK))|(tCfg-> byChaDedb<<EPT_CHA_DEDB_POS);
@@ -294,8 +301,12 @@ csi_error_t csi_ept_dbcr_config(csp_ept_t *ptEptBase, csi_ept_deadzone_config_t 
 	w_Val=(w_Val&~(EPT_CHC_DEDB_MSK))|(tCfg-> byChcDedb<<EPT_CHC_DEDB_POS);
 	csp_ept_set_dbcr( ptEptBase, w_Val);	 
 	csp_ept_set_dpscr(ptEptBase	,tCfg-> hwDpsc);
-	csp_ept_set_dbdtr(ptEptBase	,tCfg-> hwRisingEdgereGister);
-	csp_ept_set_dbdtf(ptEptBase	,tCfg-> hwFallingEdgereGister);
+	
+	w_Val=csi_get_pclk_freq();
+	w_Val=(1000000000/(w_Val/(tCfg->hwDpsc+1)));    //NS/(1/(48000000/(DPSC+1))*10^9) // 500NS/(1000/48) = 24;
+	
+	csp_ept_set_dbdtr(ptEptBase	,tCfg-> hwRisingEdgereGister /w_Val);
+	csp_ept_set_dbdtf(ptEptBase	,tCfg-> hwFallingEdgereGister/w_Val);
 	return CSI_OK;	
 }
  /**
